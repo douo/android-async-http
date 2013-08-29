@@ -30,6 +30,8 @@ import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.http.impl.client.AbstractHttpClient;
 import org.apache.http.protocol.HttpContext;
 
+import android.util.Log;
+
 class AsyncHttpRequest implements Runnable {
     private final AbstractHttpClient client;
     private final HttpContext context;
@@ -46,6 +48,18 @@ class AsyncHttpRequest implements Runnable {
         if(responseHandler instanceof BinaryHttpResponseHandler) {
             this.isBinaryRequest = true;
         }
+        cancel = false;
+    }
+    
+    
+    private boolean cancel;
+    public void cancel(){
+    	cancel = true;
+    }
+    
+    public boolean isCancel(){
+    	return cancel;
+    	//Thread.currentThread().isInterrupted();
     }
 
     @Override
@@ -71,12 +85,20 @@ class AsyncHttpRequest implements Runnable {
             }
         }
     }
+    
+    private static final String TAG ="AsyncHttpRequest";
+    private static void d(Object o){
+    	Log.d(TAG,o==null?"null":o.toString());
+    	
+    }
 
     private void makeRequest() throws IOException {
+    	d("makeRequest");
         if(!Thread.currentThread().isInterrupted()) {
         	try {
         		HttpResponse response = client.execute(request, context);
-        		if(!Thread.currentThread().isInterrupted()) {
+        		d("isInterrupted:"+isCancel());
+        		if(!isCancel()) {
         			if(responseHandler != null) {
         				responseHandler.sendResponseMessage(response);
         			}
@@ -84,7 +106,7 @@ class AsyncHttpRequest implements Runnable {
         			//TODO: should raise InterruptedException? this block is reached whenever the request is cancelled before its response is received
         		}
         	} catch (IOException e) {
-        		if(!Thread.currentThread().isInterrupted()) {
+        		if(!isCancel()) {
         			throw e;
         		}
         	}

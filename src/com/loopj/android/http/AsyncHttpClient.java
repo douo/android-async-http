@@ -19,6 +19,7 @@
 package com.loopj.android.http;
 
 import android.content.Context;
+import android.util.Log;
 
 import org.apache.http.Header;
 import org.apache.http.HeaderElement;
@@ -105,7 +106,7 @@ public class AsyncHttpClient {
     private final DefaultHttpClient httpClient;
     private final HttpContext httpContext;
     private ThreadPoolExecutor threadPool;
-    private final Map<Context, List<WeakReference<Future<?>>>> requestMap;
+    private final Map<Context, List<WeakReference<AsyncHttpRequest>>> requestMap;
     private final Map<String, String> clientHeaderMap;
 
 
@@ -169,7 +170,7 @@ public class AsyncHttpClient {
 
         threadPool = (ThreadPoolExecutor)Executors.newCachedThreadPool();
 
-        requestMap = new WeakHashMap<Context, List<WeakReference<Future<?>>>>();
+        requestMap = new WeakHashMap<Context, List<WeakReference<AsyncHttpRequest>>>();
         clientHeaderMap = new HashMap<String, String>();
     }
 
@@ -283,18 +284,28 @@ public class AsyncHttpClient {
      * @param mayInterruptIfRunning specifies if active requests should be cancelled along with pending requests.
      */
     public void cancelRequests(Context context, boolean mayInterruptIfRunning) {
-        List<WeakReference<Future<?>>> requestList = requestMap.get(context);
+    	d("cancelRequests");
+    	d(context.getClass().getCanonicalName());
+        List<WeakReference<AsyncHttpRequest>> requestList = requestMap.get(context);
         if(requestList != null) {
-            for(WeakReference<Future<?>> requestRef : requestList) {
-                Future<?> request = requestRef.get();
+            for(WeakReference<AsyncHttpRequest> requestRef : requestList) {
+                AsyncHttpRequest request = requestRef.get();
+                
                 if(request != null) {
-                    request.cancel(mayInterruptIfRunning);
+                    request.cancel();
+                    d("canceled:"+request);
                 }
             }
         }
         requestMap.remove(context);
     }
 
+    private static final String TAG ="AsyncHttpClient";
+    private static void d(Object o){
+    	Log.d(TAG,o==null?"null":o.toString());
+    	
+    }
+    
 
     //
     // HTTP GET Requests
@@ -570,17 +581,18 @@ public class AsyncHttpClient {
             uriRequest.addHeader("Content-Type", contentType);
         }
 
-        Future<?> request = threadPool.submit(new AsyncHttpRequest(client, httpContext, uriRequest, responseHandler));
+        AsyncHttpRequest request = new AsyncHttpRequest(client, httpContext, uriRequest, responseHandler);
+        Future<?> future = threadPool.submit(request);
 
         if(context != null) {
             // Add request to request map
-            List<WeakReference<Future<?>>> requestList = requestMap.get(context);
+            List<WeakReference<AsyncHttpRequest>> requestList = requestMap.get(context);
             if(requestList == null) {
-                requestList = new LinkedList<WeakReference<Future<?>>>();
+                requestList = new LinkedList<WeakReference<AsyncHttpRequest>>();
                 requestMap.put(context, requestList);
             }
 
-            requestList.add(new WeakReference<Future<?>>(request));
+            requestList.add(new WeakReference<AsyncHttpRequest>(request));
 
             // TODO: Remove dead weakrefs from requestLists?
         }
@@ -634,4 +646,6 @@ public class AsyncHttpClient {
             return -1;
         }
     }
+    
+    
 }
