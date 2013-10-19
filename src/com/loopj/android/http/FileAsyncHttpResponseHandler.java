@@ -90,12 +90,16 @@ public class FileAsyncHttpResponseHandler extends AsyncHttpResponseHandler {
         try {
             FileOutputStream buffer = new FileOutputStream(this.mFile);
             InputStream is = response.getEntity().getContent();
-
+            
             int nRead;
             byte[] data = new byte[16384];
-
-            while ((nRead = is.read(data, 0, data.length)) != -1)
+            int position = 0;
+            int length = (int) response.getEntity().getContentLength();
+            while ((nRead = is.read(data, 0, data.length)) != -1){
                 buffer.write(data, 0, nRead);
+                position += nRead;
+                onProgress(position, length);
+            }
 
             buffer.flush();
             buffer.close();
