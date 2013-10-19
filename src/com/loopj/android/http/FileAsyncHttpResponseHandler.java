@@ -1,11 +1,7 @@
 package com.loopj.android.http;
 
-import android.os.Message;
-
 import org.apache.http.Header;
-import org.apache.http.HttpResponse;
-import org.apache.http.StatusLine;
-import org.apache.http.client.HttpResponseException;
+import org.apache.http.HttpEntity;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -44,74 +40,40 @@ public class FileAsyncHttpResponseHandler extends AsyncHttpResponseHandler {
         onFailure(statusCode, e, response);
     }
 
-
-    protected void sendSuccessMessage(int statusCode, File file) {
-        sendMessage(obtainMessage(SUCCESS_MESSAGE, new Object[]{statusCode, file}));
-    }
-
-    protected void sendFailureMessage(int statusCode, Header[] headers, Throwable e, File file) {
-        sendMessage(obtainMessage(FAILURE_MESSAGE, new Object[]{statusCode, headers, e, file}));
-    }
-
-    protected void handleSuccessMessage(int statusCode, File responseBody) {
-        onSuccess(statusCode, responseBody);
-    }
-
-    protected void handleFailureMessage(int statusCode, Header[] headers, Throwable e, File responseBody) {
-        onFailure(statusCode, headers, e, responseBody);
-    }
-
-    // Methods which emulate android's Handler and Message methods
-    protected void handleMessage(Message msg) {
-        Object[] response;
-        switch (msg.what) {
-            case SUCCESS_MESSAGE:
-                response = (Object[]) msg.obj;
-                handleSuccessMessage((Integer) response[0], (File) response[1]);
-                break;
-            case FAILURE_MESSAGE:
-                response = (Object[]) msg.obj;
-                if(response[3] instanceof File){
-                    handleFailureMessage((Integer) response[0], (Header[]) response[1], (Throwable) response[2], (File) response[3]);
-                }else{
-                    handleFailureMessage((Integer) response[0], (Header[]) response[1], (Throwable) response[2], mFile);
-                }
-                break;
-            default:
-                super.handleMessage(msg);
-                break;
-        }
+    @Override
+    public void onFailure(int statusCode, Header[] headers, byte[] responseBody, Throwable error) {
+        onFailure(statusCode, headers, error, mFile);
     }
 
     @Override
-    protected void sendResponseMessage(HttpResponse response) {
-        StatusLine status = response.getStatusLine();
-
-        try {
-            FileOutputStream buffer = new FileOutputStream(this.mFile);
-            InputStream is = response.getEntity().getContent();
-            
-            int nRead;
-            byte[] data = new byte[16384];
-            int position = 0;
-            int length = (int) response.getEntity().getContentLength();
-            while ((nRead = is.read(data, 0, data.length)) != -1){
-                buffer.write(data, 0, nRead);
-                position += nRead;
-                onProgress(position, length);
-            }
-
-            buffer.flush();
-            buffer.close();
-
-        } catch (IOException e) {
-            sendFailureMessage(status.getStatusCode(), response.getAllHeaders(), e, this.mFile);
-        }
-
-        if (status.getStatusCode() >= 300) {
-            sendFailureMessage(status.getStatusCode(), response.getAllHeaders(), new HttpResponseException(status.getStatusCode(), status.getReasonPhrase()), this.mFile);
-        } else {
-            sendSuccessMessage(status.getStatusCode(), this.mFile);
-        }
+    public void onSuccess(int statusCode, Header[] headers, byte[] responseBody) {
+        onSuccess(statusCode, mFile);
     }
+
+    @Override
+    byte[] getResponseData(HttpEntity entity) throws IOException {
+      if (entity != null) {
+          InputStream instream = entity.getContent();
+          long contentLength = entity.getContentLength();
+          FileOutputStream buffer = new FileOutputStream(this.mFile);
+          if (instream != null) {
+              try {
+                  byte[] tmp = new byte[BUFFER_SIZE];
+                  int l, count = 0;
+                  // do not send messages if request has been cancelled
+                  while ((l = instream.read(tmp)) != -1 && !Thread.currentThread().isInterrupted()) {
+                      count += l;
+                      buffer.write(tmp, 0, l);
+                      sendProgressMessage(count, (int) contentLength);
+                  }
+              } finally {
+                  instream.close();
+                  buffer.flush();
+                  buffer.close();
+              }
+          }
+      }
+      return null;
+  }
+  
 }
