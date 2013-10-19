@@ -33,15 +33,15 @@ import org.apache.http.util.EntityUtils;
 import java.io.IOException;
 
 /**
- * Used to intercept and handle the responses from requests made using 
- * {@link AsyncHttpClient}. The {@link #onSuccess(String)} method is 
+ * Used to intercept and handle the responses from requests made using
+ * {@link AsyncHttpClient}. The {@link #onSuccess(String)} method is
  * designed to be anonymously overridden with your own response handling code.
- * <p>
+ * <p>&nbsp;</p>
  * Additionally, you can override the {@link #onFailure(Throwable, String)},
  * {@link #onStart()}, and {@link #onFinish()} methods as required.
- * <p>
+ * <p>&nbsp;</p>
  * For example:
- * <p>
+ * <p>&nbsp;</p>
  * <pre>
  * AsyncHttpClient client = new AsyncHttpClient();
  * client.get("http://www.google.com", new AsyncHttpResponseHandler() {
@@ -54,7 +54,7 @@ import java.io.IOException;
  *     public void onSuccess(String response) {
  *         // Successfully got a response
  *     }
- * 
+ *
  *     &#064;Override
  *     public void onFailure(Throwable e, String response) {
  *         // Response failed :(
@@ -75,16 +75,31 @@ public class AsyncHttpResponseHandler {
     protected static final int PROGRESS_MESSAGE = 4;
 
     private Handler handler;
+    private String responseCharset = "UTF-8";
+
+    /**
+     * Sets the charset for the response string. If not set, the default is UTF-8.
+     *
+     * @param charset to be used for the response string.
+     * @see <a href="http://docs.oracle.com/javase/7/docs/api/java/nio/charset/Charset.html">Charset</a>
+     */
+    public void setCharset(final String charset) {
+        this.responseCharset = charset;
+    }
+
+    public String getCharset() {
+        return this.responseCharset;
+    }
 
     /**
      * Creates a new AsyncHttpResponseHandler
      */
     public AsyncHttpResponseHandler() {
         // Set up a handler to post events back to the correct thread if possible
-        if(Looper.myLooper() != null) {
-            handler = new Handler(){
+        if (Looper.myLooper() != null) {
+            handler = new Handler() {
                 @Override
-                public void handleMessage(Message msg){
+                public void handleMessage(Message msg) {
                     AsyncHttpResponseHandler.this.handleMessage(msg);
                 }
             };
@@ -97,26 +112,40 @@ public class AsyncHttpResponseHandler {
     //
 
     /**
+     * Fired when the request progress, override to handle in your own code
+     *
+     * @param bytesWritten offset from start of file
+     * @param totalSize    total size of file
+     */
+    public void onProgress(int bytesWritten, int totalSize) {
+    }
+
+    /**
      * Fired when the request is started, override to handle in your own code
      */
-    public void onStart() {}
+    public void onStart() {
+    }
 
     /**
      * Fired in all cases when the request is finished, after both success and failure, override to handle in your own code
      */
-    public void onFinish() {}
+    public void onFinish() {
+    }
 
     /**
      * Fired when a request returns successfully, override to handle in your own code
+     *
      * @param content the body of the HTTP response from the server
      */
-    public void onSuccess(String content) {}
+    public void onSuccess(String content) {
+    }
 
     /**
      * Fired when a request returns successfully, override to handle in your own code
+     *
      * @param statusCode the status code of the response
-     * @param headers the headers of the HTTP response
-     * @param content the body of the HTTP response from the server
+     * @param headers    the headers of the HTTP response
+     * @param content    the body of the HTTP response from the server
      */
     public void onSuccess(int statusCode, Header[] headers, String content) {
         onSuccess(statusCode, content);
@@ -124,25 +153,28 @@ public class AsyncHttpResponseHandler {
 
     /**
      * Fired when a request returns successfully, override to handle in your own code
+     *
      * @param statusCode the status code of the response
-     * @param content the body of the HTTP response from the server
+     * @param content    the body of the HTTP response from the server
      */
-    public void onSuccess(int statusCode, String content)
-    {
+    public void onSuccess(int statusCode, String content) {
         onSuccess(content);
     }
 
     /**
      * Fired when a request fails to complete, override to handle in your own code
+     *
      * @param error the underlying cause of the failure
      * @deprecated use {@link #onFailure(Throwable, String)}
      */
     @Deprecated
-    public void onFailure(Throwable error) {}
+    public void onFailure(Throwable error) {
+    }
 
     /**
      * Fired when a request fails to complete, override to handle in your own code
-     * @param error the underlying cause of the failure
+     *
+     * @param error   the underlying cause of the failure
      * @param content the response body, if any
      */
     public void onFailure(Throwable error, String content) {
@@ -151,24 +183,59 @@ public class AsyncHttpResponseHandler {
     }
 
     /**
-     * Fired when the request progress, override to handle in your own code
+     * Fired when a request fails to complete, override to handle in your own code
+     *
+     * @param statusCode return HTTP status code
+     * @param error      the underlying cause of the failure
+     * @param content    the response body, if any
      */
-    public void onProgress(int position, int length) {}
+    public void onFailure(int statusCode, Throwable error, String content) {
+        // By default, call the chain method onFailure(Throwable,String)
+        onFailure(error, content);
+    }
+
+    /**
+     * Fired when a request fails to complete, override to handle in your own code
+     *
+     * @param statusCode return HTTP status code
+     * @param headers    return headers, if any
+     * @param error      the underlying cause of the failure
+     * @param content    the response body, if any
+     */
+    public void onFailure(int statusCode, Header[] headers, Throwable error, String content) {
+        // By default, call the chain method onFailure(int,Throwable,String)
+        onFailure(statusCode, error, content);
+    }
+
 
     //
     // Pre-processing of messages (executes in background threadpool thread)
     //
 
-    protected void sendSuccessMessage(int statusCode, Header[] headers, String responseBody) {
-        sendMessage(obtainMessage(SUCCESS_MESSAGE, new Object[]{new Integer(statusCode), headers, responseBody}));
+    protected void sendProgressMessage(int bytesWritten, int totalSize) {
+        sendMessage(obtainMessage(PROGRESS_MESSAGE, new Object[]{bytesWritten, totalSize}));
     }
 
-    protected void sendFailureMessage(Throwable e, String responseBody) {
-        sendMessage(obtainMessage(FAILURE_MESSAGE, new Object[]{e, responseBody}));
+    protected void sendSuccessMessage(int statusCode, Header[] headers, String responseBody) {
+        sendMessage(obtainMessage(SUCCESS_MESSAGE, new Object[]{statusCode, headers, responseBody}));
     }
-    
+
+    protected void sendFailureMessage(int statusCode, Header[] headers, Throwable e, String responseBody) {
+        sendMessage(obtainMessage(FAILURE_MESSAGE, new Object[]{statusCode, headers, e, responseBody}));
+    }
+
+    @Deprecated
+    protected void sendFailureMessage(Throwable e, String responseBody) {
+        sendMessage(obtainMessage(FAILURE_MESSAGE, new Object[]{0, null, e, responseBody}));
+    }
+
+    protected void sendFailureMessage(int statusCode, Header[] headers, Throwable e, byte[] responseBody) {
+        sendMessage(obtainMessage(FAILURE_MESSAGE, new Object[]{statusCode, headers, e, responseBody}));
+    }
+
+    @Deprecated
     protected void sendFailureMessage(Throwable e, byte[] responseBody) {
-        sendMessage(obtainMessage(FAILURE_MESSAGE, new Object[]{e, responseBody}));
+        sendMessage(obtainMessage(FAILURE_MESSAGE, new Object[]{0, null, e, responseBody}));
     }
 
     protected void sendStartMessage() {
@@ -179,9 +246,6 @@ public class AsyncHttpResponseHandler {
         sendMessage(obtainMessage(FINISH_MESSAGE, null));
     }
 
-    protected void sendProgressMessage(int position, int length) {
-        sendMessage(obtainMessage(PROGRESS_MESSAGE, new Object[]{position, length}));
-    }
 
     //
     // Pre-processing of messages (in original calling thread, typically the UI thread)
@@ -191,24 +255,23 @@ public class AsyncHttpResponseHandler {
         onSuccess(statusCode, headers, responseBody);
     }
 
-    protected void handleFailureMessage(Throwable e, String responseBody) {
-        onFailure(e, responseBody);
+    protected void handleFailureMessage(int statusCode, Header[] headers, Throwable e, String responseBody) {
+        onFailure(statusCode, headers, e, responseBody);
     }
-
 
 
     // Methods which emulate android's Handler and Message methods
     protected void handleMessage(Message msg) {
         Object[] response;
 
-        switch(msg.what) {
+        switch (msg.what) {
             case SUCCESS_MESSAGE:
-                response = (Object[])msg.obj;
-                handleSuccessMessage(((Integer) response[0]).intValue(), (Header[]) response[1], (String) response[2]);
+                response = (Object[]) msg.obj;
+                handleSuccessMessage((Integer) response[0], (Header[]) response[1], (String) response[2]);
                 break;
             case FAILURE_MESSAGE:
-                response = (Object[])msg.obj;
-                handleFailureMessage((Throwable)response[0], (String)response[1]);
+                response = (Object[]) msg.obj;
+                handleFailureMessage((Integer) response[0], (Header[]) response[1], (Throwable) response[2], (String) response[3]);
                 break;
             case START_MESSAGE:
                 onStart();
@@ -217,49 +280,68 @@ public class AsyncHttpResponseHandler {
                 onFinish();
                 break;
             case PROGRESS_MESSAGE:
-            	response = (Object[])msg.obj;
-            	onProgress(((Integer)response[0]).intValue(), ((Integer)response[1]).intValue());
-            	break;
+                response = (Object[]) msg.obj;
+                onProgress((Integer) response[0], (Integer) response[1]);
+                break;
         }
     }
 
     protected void sendMessage(Message msg) {
-        if(handler != null){
+        if (handler != null) {
             handler.sendMessage(msg);
         } else {
             handleMessage(msg);
         }
     }
 
+    protected void postRunnable(Runnable r) {
+        if (r != null) {
+            handler.post(r);
+        }
+    }
+
     protected Message obtainMessage(int responseMessage, Object response) {
-        Message msg = null;
-        if(handler != null){
+        Message msg;
+        if (handler != null) {
             msg = handler.obtainMessage(responseMessage, response);
-        }else{
+        } else {
             msg = Message.obtain();
-            msg.what = responseMessage;
-            msg.obj = response;
+            if (msg != null) {
+                msg.what = responseMessage;
+                msg.obj = response;
+            }
         }
         return msg;
     }
 
     // Interface to AsyncHttpRequest
-    void sendResponseMessage(HttpResponse response) {
+    protected void sendResponseMessage(HttpResponse response) {
+        if (response == null) {
+            sendFailureMessage(0, null, new IllegalStateException("No response"), (String) null);
+            return;
+        }
         StatusLine status = response.getStatusLine();
         String responseBody = null;
         try {
-            HttpEntity entity = null;
+            HttpEntity entity;
             HttpEntity temp = response.getEntity();
-            if(temp != null) {
+            if (temp != null) {
                 entity = new BufferedHttpEntity(temp);
-                responseBody = EntityUtils.toString(entity, "UTF-8");
+                responseBody = EntityUtils.toString(entity, getCharset());
             }
-        } catch(IOException e) {
-            sendFailureMessage(e, (String) null);
+        } catch (IOException e) {
+            try {
+                if (response.getEntity() != null)
+                    response.getEntity().consumeContent();
+            } catch (Throwable t) {
+                t.printStackTrace();
+            }
+            sendFailureMessage(status.getStatusCode(), response.getAllHeaders(), e, (String) null);
+            return;
         }
 
-        if(status.getStatusCode() >= 300) {
-            sendFailureMessage(new HttpResponseException(status.getStatusCode(), status.getReasonPhrase()), responseBody);
+        if (status.getStatusCode() >= 300) {
+            sendFailureMessage(status.getStatusCode(), response.getAllHeaders(), new HttpResponseException(status.getStatusCode(), status.getReasonPhrase()), responseBody);
         } else {
             sendSuccessMessage(status.getStatusCode(), response.getAllHeaders(), responseBody);
         }

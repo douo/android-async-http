@@ -44,7 +44,7 @@ import java.util.Random;
  */
 class SimpleMultipartEntity implements HttpEntity {
 
-    private static final String TAG = "SimpleMultipartEntity";
+    private static final String LOG_TAG = "SimpleMultipartEntity";
 
     private static final String APPLICATION_OCTET_STREAM = "application/octet-stream";
     private static final byte[] CR_LF = ("\r\n").getBytes();
@@ -56,7 +56,7 @@ class SimpleMultipartEntity implements HttpEntity {
     private String boundary;
     private byte[] boundaryLine;
     private byte[] boundaryEnd;
-    
+
     private List<FilePart> fileParts = new ArrayList<FilePart>();
 
     // The buffer we use for building the message excluding files and the last
@@ -70,7 +70,7 @@ class SimpleMultipartEntity implements HttpEntity {
     private int totalSize;
 
     public SimpleMultipartEntity(AsyncHttpResponseHandler progressHandler) {
-        final StringBuffer buf = new StringBuffer();
+        final StringBuilder buf = new StringBuilder();
         final Random rand = new Random();
         for (int i = 0; i < 30; i++) {
             buf.append(MULTIPART_CHARS[rand.nextInt(MULTIPART_CHARS.length)]);
@@ -93,9 +93,10 @@ class SimpleMultipartEntity implements HttpEntity {
             out.write(CR_LF);
         } catch (final IOException e) {
             // Can't happen on ByteArrayOutputStream
+            Log.e(LOG_TAG, "addPart ByteArrayOutputStream exception", e);
         }
     }
-    
+
     public void addPart(final String key, final String value) {
         addPart(key, value, "text/plain; charset=UTF-8");
     }
@@ -126,7 +127,7 @@ class SimpleMultipartEntity implements HttpEntity {
 
         // Stream (file)
         final byte[] tmp = new byte[4096];
-        int l = 0;
+        int l;
         while ((l = inputStream.read(tmp)) != -1) {
             out.write(tmp, 0, l);
         }
@@ -137,7 +138,7 @@ class SimpleMultipartEntity implements HttpEntity {
             inputStream.close();
         } catch (final IOException e) {
             // Not important, just log it
-            Log.w(TAG, "Cannot close input stream", e);
+            Log.w(LOG_TAG, "Cannot close input stream", e);
         }
     }
 
@@ -147,28 +148,30 @@ class SimpleMultipartEntity implements HttpEntity {
     }
 
     private byte[] createContentDisposition(final String key) {
-        StringBuilder builder = new StringBuilder();
-        builder.append("Content-Disposition: form-data; name=\"");
-        builder.append(key);
-        builder.append("\"\r\n");
-        return builder.toString().getBytes();
+        return new StringBuilder()
+                .append("Content-Disposition: form-data; name=\"")
+                .append(key)
+                .append("\"\r\n")
+                .toString()
+                .getBytes();
     }
 
     private byte[] createContentDisposition(final String key, final String fileName) {
-        StringBuilder builder = new StringBuilder();
-        builder.append("Content-Disposition: form-data; name=\"");
-        builder.append(key);
-        builder.append("\"; filename=\"");
-        builder.append(fileName);
-        builder.append("\"\r\n");
-        return builder.toString().getBytes();
+        return new StringBuilder()
+                .append("Content-Disposition: form-data; name=\"")
+                .append(key)
+                .append("\"; filename=\"")
+                .append(fileName)
+                .append("\"\r\n")
+                .toString()
+                .getBytes();
     }
 
     private void updateProgress(int count) {
         bytesWritten += count;
         progressHandler.sendProgressMessage(bytesWritten, totalSize);
     }
-    
+
     private class FilePart {
         public File file;
         public byte[] header;
@@ -190,6 +193,7 @@ class SimpleMultipartEntity implements HttpEntity {
                 headerStream.write(CR_LF);
             } catch (IOException e) {
                 // Can't happen on ByteArrayOutputStream
+                Log.e(LOG_TAG, "createHeader ByteArrayOutputStream exception", e);
             }
             return headerStream.toByteArray();
         }
@@ -205,7 +209,7 @@ class SimpleMultipartEntity implements HttpEntity {
 
             FileInputStream inputStream = new FileInputStream(file);
             final byte[] tmp = new byte[4096];
-            int l = 0;
+            int l;
             while ((l = inputStream.read(tmp)) != -1) {
                 out.write(tmp, 0, l);
                 updateProgress(l);
@@ -217,7 +221,7 @@ class SimpleMultipartEntity implements HttpEntity {
                 inputStream.close();
             } catch (final IOException e) {
                 // Not important, just log it
-                Log.w(TAG, "Cannot close input stream", e);
+                Log.w(LOG_TAG, "Cannot close input stream", e);
             }
         }
     }
@@ -281,7 +285,7 @@ class SimpleMultipartEntity implements HttpEntity {
     public void consumeContent() throws IOException, UnsupportedOperationException {
         if (isStreaming()) {
             throw new UnsupportedOperationException(
-            "Streaming entity does not implement #consumeContent()");
+                    "Streaming entity does not implement #consumeContent()");
         }
     }
 

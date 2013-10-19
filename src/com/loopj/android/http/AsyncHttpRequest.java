@@ -18,19 +18,20 @@
 
 package com.loopj.android.http;
 
-import java.io.IOException;
-import java.net.ConnectException;
-import java.net.SocketException;
-import java.net.SocketTimeoutException;
-import java.net.UnknownHostException;
-
 import org.apache.http.HttpResponse;
+import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.HttpRequestRetryHandler;
 import org.apache.http.client.methods.HttpUriRequest;
+import org.apache.http.conn.ConnectTimeoutException;
 import org.apache.http.impl.client.AbstractHttpClient;
 import org.apache.http.protocol.HttpContext;
 
-import android.util.Log;
+import java.io.IOException;
+import java.net.ConnectException;
+import java.net.MalformedURLException;
+import java.net.SocketException;
+import java.net.SocketTimeoutException;
+import java.net.UnknownHostException;
 
 class AsyncHttpRequest implements Runnable {
     private final AbstractHttpClient client;
@@ -45,39 +46,27 @@ class AsyncHttpRequest implements Runnable {
         this.context = context;
         this.request = request;
         this.responseHandler = responseHandler;
-        if(responseHandler instanceof BinaryHttpResponseHandler) {
+        if (responseHandler instanceof BinaryHttpResponseHandler) {
             this.isBinaryRequest = true;
         }
-        cancel = false;
-    }
-    
-    
-    private boolean cancel;
-    public void cancel(){
-    	cancel = true;
-    }
-    
-    public boolean isCancel(){
-    	return cancel;
-    	//Thread.currentThread().isInterrupted();
     }
 
     @Override
     public void run() {
         try {
-            if(responseHandler != null){
+            if (responseHandler != null) {
                 responseHandler.sendStartMessage();
             }
 
             makeRequestWithRetries();
 
-            if(responseHandler != null) {
+            if (responseHandler != null) {
                 responseHandler.sendFinishMessage();
             }
         } catch (IOException e) {
-            if(responseHandler != null) {
+            if (responseHandler != null) {
                 responseHandler.sendFinishMessage();
-                if(this.isBinaryRequest) {
+                if (this.isBinaryRequest) {
                     responseHandler.sendFailureMessage(e, (byte[]) null);
                 } else {
                     responseHandler.sendFailureMessage(e, (String) null);
@@ -85,31 +74,26 @@ class AsyncHttpRequest implements Runnable {
             }
         }
     }
-    
-    private static final String TAG ="AsyncHttpRequest";
-    private static void d(Object o){
-    	Log.d(TAG,o==null?"null":o.toString());
-    	
-    }
 
-    private void makeRequest() throws IOException {
-    	d("makeRequest");
-        if(!Thread.currentThread().isInterrupted()) {
-        	try {
-        		HttpResponse response = client.execute(request, context);
-        		d("isInterrupted:"+isCancel());
-        		if(!isCancel()) {
-        			if(responseHandler != null) {
-        				responseHandler.sendResponseMessage(response);
-        			}
-        		} else{
-        			//TODO: should raise InterruptedException? this block is reached whenever the request is cancelled before its response is received
-        		}
-        	} catch (IOException e) {
-        		if(!isCancel()) {
-        			throw e;
-        		}
-        	}
+    private void makeRequest() throws IOException, InterruptedException {
+        if (!Thread.currentThread().isInterrupted()) {
+            try {
+                // Fixes #115
+                if (request.getURI().getScheme() == null)
+                    throw new MalformedURLException("No valid URI scheme was provided");
+                HttpResponse response = client.execute(request, context);
+                if (!Thread.currentThread().isInterrupted()) {
+                    if (responseHandler != null) {
+                        responseHandler.sendResponseMessage(response);
+                    }
+                } else {
+                    throw new InterruptedException("makeRequest was interrupted");
+                }
+            } catch (IOException e) {
+                if (!Thread.currentThread().isInterrupted()) {
+                    throw e;
+                }
+            }
         }
     }
 
@@ -123,19 +107,28 @@ class AsyncHttpRequest implements Runnable {
             try {
                 makeRequest();
                 return;
+            } catch (ClientProtocolException e) {
+                if (responseHandler != null) {
+                    responseHandler.sendFailureMessage(e, "cannot repeat the request");
+                }
+                return;
             } catch (UnknownHostException e) {
-		        if(responseHandler != null) {
-		            responseHandler.sendFailureMessage(e, "can't resolve host");
-		        }
-	        	return;
-            }catch (SocketException e){
-                // Added to detect host unreachable
-                if(responseHandler != null) {
+                if (responseHandler != null) {
                     responseHandler.sendFailureMessage(e, "can't resolve host");
                 }
                 return;
-            }catch (SocketTimeoutException e){
-                if(responseHandler != null) {
+            } catch (ConnectTimeoutException e) {
+                if (responseHandler != null) {
+                    responseHandler.sendFailureMessage(e, "connection timed out");
+                }
+            } catch (SocketException e) {
+                // Added to detect host unreachable
+                if (responseHandler != null) {
+                    responseHandler.sendFailureMessage(e, "can't resolve host");
+                }
+                return;
+            } catch (SocketTimeoutException e) {
+                if (responseHandler != null) {
                     responseHandler.sendFailureMessage(e, "socket time out");
                 }
                 return;
@@ -147,6 +140,9 @@ class AsyncHttpRequest implements Runnable {
                 // DefaultRequestExecutor to throw an NPE, see
                 // http://code.google.com/p/android/issues/detail?id=5255
                 cause = new IOException("NPE in HttpClient" + e.getMessage());
+                retry = retryHandler.retryRequest(cause, ++executionCount, context);
+            } catch (InterruptedException e) {
+                cause = new IOException("Request was interrupted while executing");
                 retry = retryHandler.retryRequest(cause, ++executionCount, context);
             }
         }
