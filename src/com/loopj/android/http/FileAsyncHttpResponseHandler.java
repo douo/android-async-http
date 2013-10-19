@@ -98,7 +98,7 @@ public class FileAsyncHttpResponseHandler extends AsyncHttpResponseHandler {
             while ((nRead = is.read(data, 0, data.length)) != -1){
                 buffer.write(data, 0, nRead);
                 position += nRead;
-                onProgress(position, length);
+                sendProgressMessage(position, length);
             }
 
             buffer.flush();
