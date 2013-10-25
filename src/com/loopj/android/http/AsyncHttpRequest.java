@@ -26,6 +26,8 @@ import org.apache.http.conn.ConnectTimeoutException;
 import org.apache.http.impl.client.AbstractHttpClient;
 import org.apache.http.protocol.HttpContext;
 
+import android.util.Log;
+
 import java.io.IOException;
 import java.net.ConnectException;
 import java.net.MalformedURLException;
@@ -33,14 +35,15 @@ import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
 
-class AsyncHttpRequest implements Runnable {
+public class AsyncHttpRequest implements Runnable {
     private final AbstractHttpClient client;
     private final HttpContext context;
     private final HttpUriRequest request;
     private final AsyncHttpResponseHandler responseHandler;
     private boolean isBinaryRequest;
     private int executionCount;
-
+    private boolean cancel;
+    private static final String TAG = "AsyncHttpRequest";
     public AsyncHttpRequest(AbstractHttpClient client, HttpContext context, HttpUriRequest request, AsyncHttpResponseHandler responseHandler) {
         this.client = client;
         this.context = context;
@@ -49,6 +52,21 @@ class AsyncHttpRequest implements Runnable {
         if (responseHandler instanceof BinaryHttpResponseHandler) {
             this.isBinaryRequest = true;
         }
+        this.cancel = false;
+    }
+    
+    public void cancel(){
+    	cancel = true;
+    	Log.d(TAG,"cancel");
+    	if(request !=null&&!request.isAborted()){
+    		Log.d(TAG,"abort");
+    		request.abort();
+    	}
+    	responseHandler.sendCancelMessage();
+    }
+    
+    public boolean isCanceled(){    	
+    	return cancel;
     }
 
     @Override
@@ -59,7 +77,7 @@ class AsyncHttpRequest implements Runnable {
             }
 
             makeRequestWithRetries();
-
+            
             if (responseHandler != null) {
                 responseHandler.sendFinishMessage();
             }
@@ -75,22 +93,20 @@ class AsyncHttpRequest implements Runnable {
         }
     }
 
-    private void makeRequest() throws IOException, InterruptedException {
-        if (!Thread.currentThread().isInterrupted()) {
+    private void makeRequest() throws IOException {
+        if (!isCanceled()) {
             try {
                 // Fixes #115
                 if (request.getURI().getScheme() == null)
                     throw new MalformedURLException("No valid URI scheme was provided");
                 HttpResponse response = client.execute(request, context);
-                if (!Thread.currentThread().isInterrupted()) {
+                if (!isCanceled()) {
                     if (responseHandler != null) {
                         responseHandler.sendResponseMessage(response);
                     }
-                } else {
-                    throw new InterruptedException("makeRequest was interrupted");
                 }
             } catch (IOException e) {
-                if (!Thread.currentThread().isInterrupted()) {
+                if (!isCanceled()) {
                     throw e;
                 }
             }
@@ -133,16 +149,15 @@ class AsyncHttpRequest implements Runnable {
                 }
                 return;
             } catch (IOException e) {
-                cause = e;
+            	e.printStackTrace();
+                cause = e;                
                 retry = retryHandler.retryRequest(cause, ++executionCount, context);
             } catch (NullPointerException e) {
+            	e.printStackTrace();
                 // there's a bug in HttpClient 4.0.x that on some occasions causes
                 // DefaultRequestExecutor to throw an NPE, see
                 // http://code.google.com/p/android/issues/detail?id=5255
                 cause = new IOException("NPE in HttpClient" + e.getMessage());
-                retry = retryHandler.retryRequest(cause, ++executionCount, context);
-            } catch (InterruptedException e) {
-                cause = new IOException("Request was interrupted while executing");
                 retry = retryHandler.retryRequest(cause, ++executionCount, context);
             }
         }

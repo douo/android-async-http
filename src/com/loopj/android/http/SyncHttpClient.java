@@ -1,5 +1,7 @@
 package com.loopj.android.http;
 
+import java.io.IOException;
+
 import android.content.Context;
 import android.os.Message;
 
@@ -20,7 +22,7 @@ public abstract class SyncHttpClient extends AsyncHttpClient {
     protected AsyncHttpResponseHandler responseHandler = new AsyncHttpResponseHandler() {
 
         @Override
-        protected void sendResponseMessage(HttpResponse response) {
+        protected void sendResponseMessage(HttpResponse response) throws IOException {
             responseCode = response.getStatusLine().getStatusCode();
             super.sendResponseMessage(response);
         }
@@ -55,7 +57,7 @@ public abstract class SyncHttpClient extends AsyncHttpClient {
 
     // Private stuff
     @Override
-    protected void sendRequest(DefaultHttpClient client,
+    protected AsyncHttpRequest sendRequest(DefaultHttpClient client,
                                HttpContext httpContext, HttpUriRequest uriRequest,
                                String contentType, AsyncHttpResponseHandler responseHandler,
                                Context context) {
@@ -66,8 +68,11 @@ public abstract class SyncHttpClient extends AsyncHttpClient {
 		/*
          * will execute the request directly
 		 */
-        new AsyncHttpRequest(client, httpContext, uriRequest, responseHandler)
-                .run();
+        AsyncHttpRequest request = new AsyncHttpRequest(client, httpContext, uriRequest, responseHandler);
+        request.run();
+        // Return a Request Handle that cannot be used to cancel the request
+        // because it is already complete by the time this returns
+        return request;
     }
 
     public abstract String onRequestFailed(Throwable error, String content);

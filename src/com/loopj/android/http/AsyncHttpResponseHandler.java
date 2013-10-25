@@ -73,6 +73,7 @@ public class AsyncHttpResponseHandler {
     protected static final int START_MESSAGE = 2;
     protected static final int FINISH_MESSAGE = 3;
     protected static final int PROGRESS_MESSAGE = 4;
+    protected static final int CANCEL_MESSAGE = -1;
 
     private Handler handler;
     private String responseCharset = "UTF-8";
@@ -130,6 +131,12 @@ public class AsyncHttpResponseHandler {
      * Fired in all cases when the request is finished, after both success and failure, override to handle in your own code
      */
     public void onFinish() {
+    }
+    
+    /**
+     * Fired when User call AsyncHttpRequest#cancel which bind to this ResponseHandler
+     */
+    public void onCancel(){    	
     }
 
     /**
@@ -246,6 +253,9 @@ public class AsyncHttpResponseHandler {
         sendMessage(obtainMessage(FINISH_MESSAGE, null));
     }
 
+    protected void sendCancelMessage() {
+        sendMessage(obtainMessage(CANCEL_MESSAGE, null));
+    }
 
     //
     // Pre-processing of messages (in original calling thread, typically the UI thread)
@@ -283,6 +293,9 @@ public class AsyncHttpResponseHandler {
                 response = (Object[]) msg.obj;
                 onProgress((Integer) response[0], (Integer) response[1]);
                 break;
+            case CANCEL_MESSAGE:
+            	onCancel();
+            	break;
         }
     }
 
@@ -315,7 +328,7 @@ public class AsyncHttpResponseHandler {
     }
 
     // Interface to AsyncHttpRequest
-    protected void sendResponseMessage(HttpResponse response) {
+    protected void sendResponseMessage(HttpResponse response) throws IOException {
         if (response == null) {
             sendFailureMessage(0, null, new IllegalStateException("No response"), (String) null);
             return;
