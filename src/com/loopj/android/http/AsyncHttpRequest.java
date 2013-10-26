@@ -35,7 +35,7 @@ import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
 
-public class AsyncHttpRequest implements Runnable {
+class AsyncHttpRequest implements Runnable {
     private final AbstractHttpClient client;
     private final HttpContext context;
     private final HttpUriRequest request;
@@ -65,7 +65,7 @@ public class AsyncHttpRequest implements Runnable {
     	responseHandler.sendCancelMessage();
     }
     
-    public boolean isCanceled(){    	
+    public boolean isCancelled(){    	
     	return cancel;
     }
 
@@ -94,19 +94,19 @@ public class AsyncHttpRequest implements Runnable {
     }
 
     private void makeRequest() throws IOException {
-        if (!isCanceled()) {
+        if (!isCancelled()) {
             try {
                 // Fixes #115
                 if (request.getURI().getScheme() == null)
                     throw new MalformedURLException("No valid URI scheme was provided");
                 HttpResponse response = client.execute(request, context);
-                if (!isCanceled()) {
+                if (!isCancelled()) {
                     if (responseHandler != null) {
                         responseHandler.sendResponseMessage(response);
                     }
                 }
             } catch (IOException e) {
-                if (!isCanceled()) {
+                if (!isCancelled()) {
                     throw e;
                 }
             }
