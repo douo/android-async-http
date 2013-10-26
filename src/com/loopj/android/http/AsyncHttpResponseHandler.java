@@ -139,7 +139,7 @@ public class AsyncHttpResponseHandler {
     }
 
     public String getCharset() {
-        return this.responseCharset;
+        return this.responseCharset == null ? DEFAULT_CHARSET : this.responseCharset;
     }
 
     /**
@@ -196,6 +196,7 @@ public class AsyncHttpResponseHandler {
      * @param content    the body of the HTTP response from the server
      * @deprecated use {@link #onSuccess(int, Header[], byte[])}
      */
+    @Deprecated
     public void onSuccess(int statusCode, Header[] headers, String content) {
         onSuccess(statusCode, content);
     }
@@ -221,11 +222,11 @@ public class AsyncHttpResponseHandler {
      */
     public void onSuccess(int statusCode, Header[] headers, byte[] responseBody) {
         try {
-            String response = new String(responseBody, getCharset());
+            String response = responseBody == null ? null : new String(responseBody, getCharset());
             onSuccess(statusCode, headers, response);
         } catch (UnsupportedEncodingException e) {
             Log.e(LOG_TAG, e.toString());
-            onFailure(statusCode, headers, e, (String) null);
+            onFailure(statusCode, headers, e, null);
         }
     }
 
@@ -290,9 +291,8 @@ public class AsyncHttpResponseHandler {
      * @param error        the underlying cause of the failure
      */
     public void onFailure(int statusCode, Header[] headers, byte[] responseBody, Throwable error) {
-        String response = null;
         try {
-            response = new String(responseBody, getCharset());
+            String response = responseBody == null ? null : new String(responseBody, getCharset());
             onFailure(statusCode, headers, error, response);
         } catch (UnsupportedEncodingException e) {
             Log.e(LOG_TAG, e.toString());
